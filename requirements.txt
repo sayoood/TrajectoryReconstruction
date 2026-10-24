@@ -1,0 +1,9 @@
+numpy
+scipy>=1.11
+pandas>=2.0
+matplotlib>=3.8
+# Below 5: cv2 5.0 changed HoughLinesP's output shape to (N, 4), which breaks
+# lane_calib's `seg[:, 0]` unpacking.
+opencv-python>=4.9,<5
+pytest
+# Also required on PATH, not pip-installable: ffmpeg AND ffprobe (apt-get install ffmpeg).

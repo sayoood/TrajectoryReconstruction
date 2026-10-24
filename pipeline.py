@@ -54,6 +54,7 @@ from trajlib import diagnose as DG
 from trajlib import timesync as TS
 from trajlib import viz
 from trajlib.camera import calibrate_camera
+from trajlib.attitude_track import camera_for_time, load_attitude_track
 from trajlib.io_sensorlogger import load_session
 from trajlib.steering import AUDI_A6_ETRON, estimate_steering
 from trajlib.trajectory import (ego_trajectory, estimate_trajectory,
@@ -307,9 +308,24 @@ def process_one(zip_path, out_dir, scratch, args, log) -> dict:
         log("REJECTED: the solved trajectory failed its checks", "ERROR")
         return report
 
-    steer = estimate_steering(traj, {**AUDI_A6_ETRON, "wheelbase_m": args.wheelbase,
-                                     "steering_ratio": args.steering_ratio},
-                              max_wheel_rate_deg_s=args.max_wheel_rate)
+    # ⚠️ THE LABEL MUST NOT OUTLIVE THE VALUES IT DESCRIBES. Overriding --wheelbase
+    # used to leave `name` at the default, so the panel printed
+    # "Steering [Audi A6 e-tron, L=3.105 m, ratio 15.9:1]" -- a wrong car beside a
+    # correct number, which reads as a fact about that car. Same failure as the yaw
+    # gate calling a nominal placeholder "the FOE": the log looked like a measurement.
+    veh = {**AUDI_A6_ETRON, "wheelbase_m": args.wheelbase,
+           "steering_ratio": args.steering_ratio}
+    if args.vehicle_name:
+        veh["name"] = args.vehicle_name
+    else:
+        changed = [n for n, v in (("wheelbase", args.wheelbase),
+                                  ("ratio", args.steering_ratio))
+                   if abs(v - AUDI_A6_ETRON[{"wheelbase": "wheelbase_m",
+                                             "ratio": "steering_ratio"}[n]]) > 1e-9]
+        if changed:
+            veh["name"] = (f"unnamed vehicle ({', '.join(changed)} overridden; other "
+                           f"{AUDI_A6_ETRON['name']} values retained)")
+    steer = estimate_steering(traj, veh, max_wheel_rate_deg_s=args.max_wheel_rate)
     log.block("steering", steer.summary())
 
     # ------------------------------------------------------------- camera
@@ -317,6 +333,84 @@ def process_one(zip_path, out_dir, scratch, args, log) -> dict:
                            vframe=vframe, height_m=args.cam_height)
     cam, calib = self_calibrate(video, cam, traj, sync, args, log,
                                 session=session, vframe=vframe)
+
+    # ---- operator overrides, for VALIDATION runs ---------------------------- #
+    # Applied AFTER every estimator so they are authoritative, and recorded in the
+    # provenance as an override rather than a measurement. This exists because the
+    # ground plane cannot separate focal length from height (scale_calib.py), so
+    # settling the geometry needs externally supplied values to be pinned and the
+    # rest re-derived against them. Anything set here is NOT a measurement and the
+    # provenance must never let it read as one.
+    # ⚠️ The focal goes FIRST, because --horizon-row is converted to a pitch via
+    # ``atan((row - cy) / fy)`` and would otherwise use the old focal, silently
+    # placing the horizon somewhere else than the row asked for.
+    if getattr(args, "focal_px", None) is not None:
+        cam.fx = cam.fy = float(args.focal_px)
+        calib["parameters"]["focal_px"] = {
+            "value": round(float(args.focal_px), 1), "unit": "px",
+            "source": f"OPERATOR OVERRIDE --focal-px (not measured)"}
+        calib["parameters"]["hfov_deg"] = {
+            "value": round(float(np.rad2deg(2 * np.arctan(cam.cx / cam.fx))), 2),
+            "unit": "deg", "source": "derived from --focal-px (not measured)"}
+        log(f"    override: focal = {args.focal_px:.1f} px "
+            f"(HFOV {np.rad2deg(2*np.arctan(cam.cx/cam.fx)):.1f} deg) (operator)", "WARN")
+    for flag, attr, unit in (("cam_yaw", "yaw", "deg"),
+                             ("cam_pitch", "pitch", "deg"),
+                             ("cam_roll", "roll", "deg")):
+        val = getattr(args, flag, None)
+        if val is None:
+            continue
+        setattr(cam, attr, float(np.deg2rad(val)))
+        calib["parameters"][f"{attr}_deg"] = {
+            "value": round(float(val), 3), "unit": unit,
+            "source": f"OPERATOR OVERRIDE --{flag.replace('_', '-')} (not measured)"}
+        log(f"    override: {attr} = {val:+.3f} deg (operator)", "WARN")
+    if getattr(args, "horizon_row", None) is not None:
+        # Equivalent to a pitch override, but expressed in the quantity that is
+        # directly observable in the image: the row the lane markings converge to.
+        # pitch = atan((row - cy) / fy)
+        row = float(args.horizon_row)
+        cam.pitch = float(np.arctan2(row - cam.cy, cam.fy))
+        calib["parameters"]["pitch_deg"] = {
+            "value": round(float(np.rad2deg(cam.pitch)), 3), "unit": "deg",
+            "source": f"OPERATOR OVERRIDE --horizon-row {row:.1f} px (not measured)"}
+        log(f"    override: horizon row = {row:.1f} px "
+            f"-> pitch {np.rad2deg(cam.pitch):+.3f} deg (operator)", "WARN")
+    if getattr(args, "lock_height", False):
+        # ⚠️ `--cam-height` alone is NOT authoritative: it seeds the camera before
+        # `scale_calib` runs, and `scale_calib.solve` then RESETS `cam.height_m` from
+        # f*h and the lane width. MEASURED 2026-09-13: a run given `--cam-height 1.60`
+        # rendered at 1.622, because scale_calib recomputed it and nothing put the
+        # operator's value back. Every other override in this block is applied after
+        # the estimators precisely so it cannot be undone; the height was the one gap.
+        cam.height_m = float(args.cam_height)
+        calib["parameters"]["height_m"] = {
+            "value": round(float(args.cam_height), 3), "unit": "m",
+            "source": "OPERATOR OVERRIDE --lock-height (not measured)"}
+        log(f"    override: camera height locked at {args.cam_height:.3f} m", "WARN")
+    if getattr(args, "lock_lateral", False):
+        calib["parameters"]["lateral_offset_m"] = {
+            "value": round(float(args.lateral_offset), 3), "unit": "m",
+            "source": "OPERATOR OVERRIDE --lock-lateral (not measured)"}
+        log(f"    override: lateral offset locked at {args.lateral_offset:+.3f} m", "WARN")
+    if getattr(args, "attitude_track", None):
+        _trk = load_attitude_track(args.attitude_track)
+        calib["parameters"]["attitude_track"] = {
+            "path": os.path.abspath(args.attitude_track),
+            "n": int(_trk.t.size),
+            "yaw_deg_range": [round(float(_trk.yaw_deg.min()), 3),
+                              round(float(_trk.yaw_deg.max()), 3)],
+            "horizon_row_range": (None if _trk.horizon_row is None else
+                                  [round(float(_trk.horizon_row.min()), 1),
+                                   round(float(_trk.horizon_row.max()), 1)]),
+            "source": ("TIME-VARYING attitude for DRAWING ONLY (not a mount calibration): "
+                       + (_trk.source or "no source recorded"))}
+        log(f"    attitude track: {_trk.t.size} samples, yaw "
+            f"{_trk.yaw_deg.min():+.2f}..{_trk.yaw_deg.max():+.2f} deg"
+            + ("" if _trk.horizon_row is None else
+               f", horizon {_trk.horizon_row.min():.1f}..{_trk.horizon_row.max():.1f} px")
+            + " -- applied per rendered frame", "WARN")
+
     # The trajectory is about to be re-referenced to the vehicle, so the camera
     # is no longer at the origin: it sits at the mount position.  project()
     # already subtracts t_v, it simply was never told.
@@ -480,8 +574,38 @@ def self_calibrate(video, cam, traj, sync, args, log, session=None, vframe=None)
         try:
             from trajlib import lane_calib as LC
             foe_yaw = float(np.rad2deg(cam.yaw))
+            # `lane_calib`'s credibility gate rejects a lane-VP yaw more than
+            # `max_yaw_correction_deg` (default 4.0) from `cam.yaw`, and calls
+            # cam.yaw "the FOE". That is only true when the FOE fit SUCCEEDED.
+            # Every failure path in camera.py (:396,:401,:403,:408) leaves
+            # cam.yaw at the NOMINAL 0.0 and records `extrinsics_note`; only the
+            # success path (:414) sets `extrinsics`. So with no FOE the gate
+            # silently degenerates into "reject any mount yaw beyond 4 deg of
+            # dead ahead" -- and it rejects HARDEST exactly when the mount is
+            # most crooked, which is when the correction matters most.
+            #
+            # MEASURED 2026-08-08 on 14-19-54: the FOE fit produced no usable
+            # flow, lane_calib measured -7.01 deg with a half-split spread of
+            # 0.20 deg (its own stability gate is 0.6 -- comfortably passed),
+            # and the yaw was discarded for being "7.0 deg from the FOE" that
+            # did not exist. An independent VP fit over 154 straight frames /
+            # 6689 segments gives -6.05 deg [95% CI -6.28, -5.83]. Shipping 0.0
+            # put >1 lane width of lateral error into the overlay beyond ~15 m.
+            #
+            # Fix: the CALLER decides whether the cross-check is applicable,
+            # because the caller is what knows whether a FOE reference exists.
+            # With no FOE there is nothing to agree with, so the bound becomes a
+            # plain plausibility limit on mount yaw -- 15 deg, the same constant
+            # camera.py:405 uses to sanity-check the FOE itself. The half-split
+            # stability gate is untouched and remains the real quality check.
+            foe_measured = "extrinsics" in cam.source
             res = LC.estimate(session, video, cam, vframe,
-                              t_video_start_s=sync.t_video_start)
+                              t_video_start_s=sync.t_video_start,
+                              max_yaw_correction_deg=(4.0 if foe_measured else 15.0))
+            if not foe_measured:
+                rec["cross_checks"]["lane_yaw_gate"] = (
+                    "no FOE reference; agreement gate replaced by a 15 deg "
+                    "plausibility bound (camera.py:405)")
             log.block("lane markings", str(res))
             for n in res.notes:
                 log(f"    {n}", "WARN")
@@ -501,8 +625,11 @@ def self_calibrate(video, cam, traj, sync, args, log, session=None, vframe=None)
             prov = LC.apply(cam, res)
             for k, v in prov.items():
                 rec["parameters"][k] = v
-            if res.lateral_offset_m is not None:
+            if res.lateral_offset_m is not None and not getattr(args, "lock_lateral", False):
                 args.lateral_offset = res.lateral_offset_m
+            elif res.lateral_offset_m is not None:
+                log(f"    lane lateral {res.lateral_offset_m:+.2f} m NOT applied "
+                    f"(--lock-lateral holds {args.lateral_offset:+.2f} m)", "WARN")
         except Exception as e:
             log(f"lane calibration skipped: {e}", "WARN")
 
@@ -516,8 +643,31 @@ def self_calibrate(video, cam, traj, sync, args, log, session=None, vframe=None)
             from trajlib import scale_calib as SC
             ft = sync.frame_times(video.pts)
             spd = np.interp(ft, traj.t, traj.speed)
-            vals, note = SC.estimate_fh(video, np.arange(len(ft)), spd, ft,
-                                        cam.horizon_v(), video.width, video.height)
+            vals, note = None, None
+            # ---- ground flow first: it solves for the horizon instead of taking it -- #
+            # `SC.estimate_fh` is passed `cam.horizon_v()`, and a road point's range is
+            # f*h / (v - v_horizon). A horizon that is 50 px wrong therefore biases every
+            # track, by an amount that depends on where in the frame the track sat --
+            # which is how it returned a 62% spread over 1576 tracks on the 2026-08-08
+            # recording and declined. `flow_calib` fits the horizon jointly, so it cannot
+            # be poisoned that way.
+            if getattr(args, "flow_calib", True):
+                from trajlib import flow_calib as FC
+                fres = FC.estimate(video, traj, sync, cam)
+                log.block("f*h from ground flow", str(fres))
+                for n in fres.notes:
+                    log(f"    {n}", "WARN")
+                if fres.ok:
+                    vals = np.full(max(fres.n_points, 1), fres.fh, dtype=float)
+                    rec["cross_checks"]["fh_flow_px_m"] = round(fres.fh, 1)
+                    rec["cross_checks"]["fh_flow_ci"] = [round(v, 1) for v in fres.fh_ci]
+                    rec["cross_checks"]["horizon_flow_px"] = round(fres.horizon_row, 1)
+                    rec["cross_checks"]["horizon_flow_ci"] = [round(v, 1) for v in fres.horizon_ci]
+                    rec["cross_checks"]["horizon_flow_minus_current_px"] = round(
+                        fres.horizon_row - cam.horizon_v(), 1)
+            if vals is None:
+                vals, note = SC.estimate_fh(video, np.arange(len(ft)), spd, ft,
+                                            cam.horizon_v(), video.width, video.height)
             if note:
                 log(f"f*h not measured: {note}", "WARN")
             res = SC.solve(vals, lane_w_measured, cam.height_m,
@@ -693,7 +843,10 @@ def emit_outputs(out_dir, session, video, sync, traj, steer, cam, args, log, cal
     ego = _ego_at(traj, float(ft[mid]), args)
     img = _grab_bgr(video, int(mid))
     if img is not None and ego is not None:
-        panel = _compose(img, ego, cam, steer, float(ft[mid]), args)
+        _trk = (load_attitude_track(args.attitude_track)
+                if getattr(args, "attitude_track", None) else None)
+        panel = _compose(img, ego, camera_for_time(cam, _trk, float(ft[mid])),
+                         steer, float(ft[mid]), args)
         cv2.imwrite(os.path.join(out_dir, "validation.png"), panel)
         outs["validation.png"] = f"composite at t={ft[mid]:.1f}s"
 
@@ -779,7 +932,10 @@ def _extract_frames(video, indices, out_dir, quality, width):
 
 def _compose(img, ego, cam, steer, t_ref, args):
     over = viz.draw_trajectory_on_image(img, ego, cam, vehicle_width=args.vehicle_width,
-                                        lateral_offset_m=0.0)
+                                        lateral_offset_m=0.0,
+                                        fade_start_m=args.fade_start_m,
+                                        fade_end_m=args.fade_end_m,
+                                        near_clip_m=args.near_clip_m)
     over = viz.draw_hud(over, ego)
     sw = float(np.interp(t_ref, steer.t, steer.wheel_deg))
     sr = float(np.interp(t_ref, steer.t, steer.wheel_rate_deg_s))
@@ -798,6 +954,8 @@ def _render_video(video, indices, ft, traj, steer, cam, args, out_path, log):
         log("ffmpeg not on PATH; skipping the video", "WARN")
         return 0
     fps = max(video.avg_fps / max(args.video_stride, 1), 1.0)
+    track = (load_attitude_track(args.attitude_track)
+             if getattr(args, "attitude_track", None) else None)
     proc, n = None, 0
     t0 = time.time()
     for k, fi in enumerate(indices):
@@ -805,7 +963,8 @@ def _render_video(video, indices, ft, traj, steer, cam, args, out_path, log):
         img = _grab_bgr(video, int(fi))
         if ego is None or img is None:
             continue
-        panel = _compose(img, ego, cam, steer, float(ft[fi]), args)
+        cam_t = camera_for_time(cam, track, float(ft[fi]))
+        panel = _compose(img, ego, cam_t, steer, float(ft[fi]), args)
         if proc is None:
             h, w = panel.shape[:2]
             proc = subprocess.Popen(
@@ -844,9 +1003,63 @@ def main():
                          "NEGATIVE (phone mounted right of centre). Unobservable from "
                          "motion - measure it once per mount.")
     ap.add_argument("--cam-height", type=float, default=1.17)
+    # ---- operator overrides for VALIDATION runs -------------------------------
+    # The ground plane cannot separate focal length from camera height
+    # (scale_calib.py), so pinning the geometry needs external values supplied and
+    # the rest re-derived against them. Every one of these is recorded in the
+    # provenance as "OPERATOR OVERRIDE ... (not measured)" so a validation run can
+    # never be mistaken for a measurement.
+    ap.add_argument("--focal-px", type=float, default=None,
+                    help="override the focal length (px). Applied BEFORE --horizon-row, "
+                         "which converts a row to a pitch using it. MEASURED 2026-09-13 "
+                         "on this corpus: the ROW FLOW of tracked ground points against "
+                         "the odometer gives f*h = 2444 px*m, so the focal follows from "
+                         "the height via f = f*h / h -- see "
+                         "incoming/2026-09-13-bev-semantic-calib/flow_scale.py")
+    ap.add_argument("--cam-yaw", type=float, default=None,
+                    help="override mount yaw (deg), applied after all estimators")
+    ap.add_argument("--cam-pitch", type=float, default=None,
+                    help="override mount pitch (deg), applied after all estimators")
+    ap.add_argument("--cam-roll", type=float, default=None,
+                    help="override mount roll (deg), applied after all estimators")
+    ap.add_argument("--horizon-row", type=float, default=None,
+                    help="override pitch by the row the lane markings converge to "
+                         "(px). Directly observable in the image, unlike pitch; "
+                         "pitch = atan((row - cy) / fy). Overrides --cam-pitch.")
+    ap.add_argument("--lock-height", action="store_true",
+                    help="make --cam-height authoritative. Without it scale_calib "
+                         "recomputes the height from f*h and the lane width and the "
+                         "operator's value is silently discarded.")
+    ap.add_argument("--attitude-track", default=None,
+                    help="JSON {t_session_s, yaw_deg[, horizon_row]} applied PER FRAME when "
+                         "drawing the overlay. For recordings with electronic stabilisation, "
+                         "where the crop -- and so the effective camera -- moves during the "
+                         "clip and no constant yaw can be right (see attitude_track.py). "
+                         "Changes only the drawing; the trajectory is camera-independent.")
+    ap.add_argument("--lock-lateral", action="store_true",
+                    help="keep --lateral-offset even if lane_calib measures one")
     ap.add_argument("--vehicle-width", type=float, default=1.8)
     ap.add_argument("--wheelbase", type=float, default=AUDI_A6_ETRON["wheelbase_m"])
     ap.add_argument("--steering-ratio", type=float, default=AUDI_A6_ETRON["steering_ratio"])
+    ap.add_argument("--near-clip-m", type=float, default=4.0,
+                    help="drop the ribbon nearer than this CAMERA range. The road is "
+                         "hidden by the bonnet below ~6.4 m on the 2026-08-08 Caddy, and "
+                         "drawing there paints the widest part of the ribbon onto sheet "
+                         "metal right beside the visible shoulder -- which reads as the "
+                         "corridor leaving the road (R-2026-09-15-nearclip)")
+    ap.add_argument("--fade-start-m", type=float, default=30.0,
+                    help="range at which the drawn corridor starts fading out")
+    ap.add_argument("--fade-end-m", type=float, default=55.0,
+                    help="range at which it has faded to nothing. The default is set "
+                         "by measurement: the per-frame corridor-to-lane angle has a "
+                         "real spread of ~1 deg, which is 0.93 m at 53 m -- half the "
+                         "ribbon's width. Beyond that a solid edge asserts a precision "
+                         "the geometry does not have. Set large to disable.")
+    ap.add_argument("--vehicle-name", default=None,
+                    help="name for the steering read-out. Without it, overriding "
+                         "--wheelbase or --steering-ratio relabels the vehicle as "
+                         "'unnamed', so the panel never shows a car's name next to "
+                         "numbers that are not that car's.")
     ap.add_argument("--max-wheel-rate", type=float, default=180.0)
 
     # trajectory export
@@ -872,6 +1085,12 @@ def main():
     ap.add_argument("--scale-calib", action="store_true", default=True,
                     help="separate focal from camera height via f*h and lane width")
     ap.add_argument("--no-scale-calib", dest="scale_calib", action="store_false")
+    ap.add_argument("--flow-calib", action="store_true", default=True,
+                    help="measure f*h AND the horizon from ground flow against the "
+                         "odometer, instead of taking the horizon as given. Preferred "
+                         "over scale_calib, which is passed cam.horizon_v() and is "
+                         "biased by any error in it (62%% spread on 2026-08-08).")
+    ap.add_argument("--no-flow-calib", dest="flow_calib", action="store_false")
     ap.add_argument("--lane-width", type=float, default=3.65,
                     help="true lane width in metres; external metric knowledge that "
                          "lets f and h be separated (US 12 ft = 3.66, DE = 3.50)")

@@ -10,6 +10,21 @@ plus a bird's-eye view and an in-image projection.
 See [AUDIT.md](AUDIT.md) for the review of the previous pipeline, the bugs found, and the
 measured performance of this one.
 
+## Repository layout
+
+| path | contents |
+|---|---|
+| `pipeline.py`, `render_video.py`, `run_demo.py` | entry points |
+| `trajlib/` | the library (module map below) |
+| `Trajectory_Calucation_Deepthink/`, `Sensor_Data_synchronization/` | the original notebooks |
+| `tests/` | `python -m pytest -q` |
+| `studies/` | calibration studies of the 2026-08-08 recording: probes, raw results, write-ups |
+| `docs/` | integration notes and the log of calibration claims that were retracted |
+| [`CHANGES.md`](CHANGES.md) | what changed since the original Google Drive version, and why |
+
+The first commit is the original Google Drive project, unmodified. Parts of this README
+and of AUDIT.md describe that version; CHANGES.md lists what is different now.
+
 ---
 
 ## Quick start
@@ -111,10 +126,15 @@ the road is marked — the operator value is the fallback and the sign prior.
 | `frame_folder.py` | treat a folder of extracted frames as a video source |
 | `steering.py` | curvature, steering-wheel angle, drivability constraint |
 | `ground_calib.py` | fit roll/pitch/yaw/height from tracked road features |
+| `flow_calib.py` | `f*h` and the horizon from ground flow against the odometer |
+| `horizon_calib.py` | horizon row from lane-width constancy, in closed form |
+| `attitude_track.py` | per-frame camera yaw/horizon for drawing, for recordings with stabilisation on |
 
 ## Requirements
 
 `numpy`, `scipy`, `pandas`, `opencv-python`, `matplotlib`, and **ffmpeg/ffprobe on PATH**.
+`pip install -r requirements.txt`; keep OpenCV below 5 (5.0 changed `HoughLinesP`'s output
+shape, which breaks `lane_calib`).
 
 ## Measured accuracy
 

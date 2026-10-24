@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+# recordings and rendered output
+*.zip
+*.mp4
+work/
+synchronized_output/
+*-android/
