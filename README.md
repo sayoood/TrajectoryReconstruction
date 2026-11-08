@@ -18,6 +18,7 @@ measured performance of this one.
 | `trajlib/` | the library (module map below) |
 | `Trajectory_Calucation_Deepthink/`, `Sensor_Data_synchronization/` | the original notebooks |
 | `tests/` | `python -m pytest -q` |
+| `tools/verify_overlay.py` | measures whether a rendered overlay stays in the lane |
 | `studies/` | calibration studies of the 2026-08-08 recording: probes, raw results, write-ups |
 | `docs/` | integration notes and the log of calibration claims that were retracted |
 | [`CHANGES.md`](CHANGES.md) | what changed since the original Google Drive version, and why |

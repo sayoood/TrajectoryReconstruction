@@ -64,6 +64,19 @@ available, and it falls back to the cowl track plus a constant.
 **For new recordings, turn stabilisation off and use a rigid mount.** That removes the
 need for a per-frame track.
 
+## Checking an overlay
+
+`tools/verify_overlay.py` measures, on a finished output folder, whether the drawn path
+stays in the lane: the angle between path and lane (fitted as whole lines), the offset
+from the lane centre at 10 m and 25 m, and prediction vs outcome (where the ribbon said
+the car would be at 20/30 m against where it was when it got there), per frame and per
+5 s bin. It is the general form of the probes in `studies/2026-09-13-bev-semantic-calib/probes/`,
+which were tied to one recording.
+
+```bash
+python tools/verify_overlay.py --run <output>/<recording> --json verify.json --draw 300 900 --draw-dir checks/
+```
+
 ## Tests
 
 `tests/` was ported from TanitAD (`stack/tests/test_trajrecon_*.py`,
