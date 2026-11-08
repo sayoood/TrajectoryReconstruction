@@ -1,0 +1,106 @@
+{
+ "recording": "1000N-2026-11-03_08-08-19-android",
+ "image": {
+  "width": 1920,
+  "height": 1080
+ },
+ "K": {
+  "fx": 700.0,
+  "fy": 700.0,
+  "cx": 960.0,
+  "cy": 540.0
+ },
+ "extrinsics": {
+  "yaw_deg": -9.6,
+  "pitch_deg": 0.32740089084438817,
+  "roll_deg": 0.0,
+  "height_m": 1.3,
+  "lateral_offset_m": 0.0,
+  "longitudinal_m": 1.75
+ },
+ "horizon_row_px": 544.0,
+ "raw_sources": {
+  "intrinsics": "gyro-regressed f (r=0.93, n=335)",
+  "foe_rotation_gate": "gyro |omega| per frame interval",
+  "extrinsics_note": "FOE fit selected no usable frame pairs - kept nominal"
+ },
+ "per_recording": true,
+ "parameters": {
+  "focal_px": {
+   "value": 700.0,
+   "unit": "px",
+   "source": "OPERATOR OVERRIDE --focal-px (not measured)"
+  },
+  "hfov_deg": {
+   "value": 107.8,
+   "unit": "deg",
+   "source": "derived from --focal-px (not measured)"
+  },
+  "yaw_deg": {
+   "value": -9.6,
+   "unit": "deg",
+   "source": "OPERATOR OVERRIDE --cam-yaw (not measured)"
+  },
+  "pitch_deg": {
+   "value": 0.327,
+   "unit": "deg",
+   "source": "OPERATOR OVERRIDE --horizon-row 544.0 px (not measured)"
+  },
+  "height_m": {
+   "value": 1.3,
+   "unit": "m",
+   "source": "OPERATOR OVERRIDE --lock-height (not measured)"
+  },
+  "roll_deg": {
+   "value": 0.0,
+   "unit": "deg",
+   "source": "OPERATOR OVERRIDE --cam-roll (not measured)"
+  },
+  "lateral_offset_m": {
+   "value": 0.0,
+   "unit": "m",
+   "source": "OPERATOR OVERRIDE --lock-lateral (not measured)"
+  },
+  "mount_longitudinal_m": {
+   "value": 1.75,
+   "unit": "m",
+   "source": "operator prior",
+   "note": "+forward. Phone position ahead of the vehicle reference point (rear axle). The exported trajectory is the rear axle's path, not the phone's: a point mounted this far forward swings wide through every turn, and ignoring it left up to 2.6 m of lateral error at intersections while straight-road checks still showed centimetres."
+  },
+  "trajectory_reference": {
+   "value": "rear axle",
+   "unit": "-",
+   "source": "phone re-referenced by (L=1.75, W=+0.00) m via a per-point rigid transform"
+  },
+  "vehicle_width_m": {
+   "value": 1.923,
+   "unit": "m",
+   "source": "operator setting"
+  }
+ },
+ "cross_checks": {
+  "plane": "insufficient homographies",
+  "vertical_vp": "insufficient vertical lines",
+  "lane_yaw_gate": "no FOE reference; agreement gate replaced by a 15 deg plausibility bound (camera.py:405)",
+  "lane_frames": 80,
+  "lane_segments": 1146,
+  "pitch_foe_vs_lane_vp_px": 123.0,
+  "yaw_foe_vs_lane_deg": 1.695,
+  "fh_flow_px_m": 1097.7,
+  "fh_flow_ci": [
+   1067.5,
+   1208.0
+  ],
+  "horizon_flow_px": 532.1,
+  "horizon_flow_ci": [
+   526.4,
+   534.2
+  ],
+  "horizon_flow_minus_current_px": -7.9,
+  "fh_px_m": 1097.7,
+  "fh_tracks": 81471,
+  "fh_spread": 0.0,
+  "hfov_deg": 54.67,
+  "focal_rejected": "54.7 deg HFOV out of band"
+ }
+}

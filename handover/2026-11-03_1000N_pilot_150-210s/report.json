@@ -1,0 +1,208 @@
+{
+ "recording": "1000N-2026-11-03_08-08-19-android",
+ "zip": "1000N-2026-11-03_08-08-19-android.zip",
+ "status": "DONE",
+ "started_utc": "2026-11-08T13:35:38.709658+00:00",
+ "outputs": {
+  "sensors/": "8 streams on a common timebase",
+  "trajectory.jsonl": "1800 frames, ego frame FLU, past+future",
+  "frames/": "1800 JPEGs (stride 1)",
+  "validation.png": "composite at t=180.0s",
+  "overlay.mp4": "1800 frames, projection + BEV + steering",
+  "calibration.json": "per-recording parameter set with provenance per parameter"
+ },
+ "calibration_set": {
+  "per_recording": true,
+  "parameters": {
+   "focal_px": {
+    "value": 700.0,
+    "unit": "px",
+    "source": "OPERATOR OVERRIDE --focal-px (not measured)"
+   },
+   "hfov_deg": {
+    "value": 107.8,
+    "unit": "deg",
+    "source": "derived from --focal-px (not measured)"
+   },
+   "yaw_deg": {
+    "value": -9.6,
+    "unit": "deg",
+    "source": "OPERATOR OVERRIDE --cam-yaw (not measured)"
+   },
+   "pitch_deg": {
+    "value": 0.327,
+    "unit": "deg",
+    "source": "OPERATOR OVERRIDE --horizon-row 544.0 px (not measured)"
+   },
+   "height_m": {
+    "value": 1.3,
+    "unit": "m",
+    "source": "OPERATOR OVERRIDE --lock-height (not measured)"
+   },
+   "roll_deg": {
+    "value": 0.0,
+    "unit": "deg",
+    "source": "OPERATOR OVERRIDE --cam-roll (not measured)"
+   },
+   "lateral_offset_m": {
+    "value": 0.0,
+    "unit": "m",
+    "source": "OPERATOR OVERRIDE --lock-lateral (not measured)"
+   },
+   "mount_longitudinal_m": {
+    "value": 1.75,
+    "unit": "m",
+    "source": "operator prior",
+    "note": "+forward. Phone position ahead of the vehicle reference point (rear axle). The exported trajectory is the rear axle's path, not the phone's: a point mounted this far forward swings wide through every turn, and ignoring it left up to 2.6 m of lateral error at intersections while straight-road checks still showed centimetres."
+   },
+   "trajectory_reference": {
+    "value": "rear axle",
+    "unit": "-",
+    "source": "phone re-referenced by (L=1.75, W=+0.00) m via a per-point rigid transform"
+   },
+   "vehicle_width_m": {
+    "value": 1.923,
+    "unit": "m",
+    "source": "operator setting"
+   }
+  },
+  "cross_checks": {
+   "plane": "insufficient homographies",
+   "vertical_vp": "insufficient vertical lines",
+   "lane_yaw_gate": "no FOE reference; agreement gate replaced by a 15 deg plausibility bound (camera.py:405)",
+   "lane_frames": 80,
+   "lane_segments": 1146,
+   "pitch_foe_vs_lane_vp_px": 123.0,
+   "yaw_foe_vs_lane_deg": 1.695,
+   "fh_flow_px_m": 1097.7,
+   "fh_flow_ci": [
+    1067.5,
+    1208.0
+   ],
+   "horizon_flow_px": 532.1,
+   "horizon_flow_ci": [
+    526.4,
+    534.2
+   ],
+   "horizon_flow_minus_current_px": -7.9,
+   "fh_px_m": 1097.7,
+   "fh_tracks": 81471,
+   "fh_spread": 0.0,
+   "hfov_deg": 54.67,
+   "focal_rejected": "54.7 deg HFOV out of band"
+  }
+ },
+ "diagnosis": {
+  "verdict": "DEGRADED",
+  "stats": {
+   "platform_detected": "android",
+   "platform": "android",
+   "device": "SM-S928B",
+   "gravity_mag_ms2": 9.8067,
+   "total_accel_mag_ms2": 9.9676,
+   "unit_notes": "accel: derived: total_accel - gravity [m/s^2, linear]; gravity: Gravity.csv [m/s^2]; total_accel: TotalAcceleration.csv [m/s^2]",
+   "frozen_fraction": 0.001,
+   "n_fixes": 675,
+   "hacc_median_m": 3.82,
+   "n_speed_missing": 0,
+   "speed_range_ms": [
+    0.0,
+    26.72
+   ],
+   "max_gap_s": 1.01,
+   "accel_hz": 92.79,
+   "gyro_hz": 92.79,
+   "gravity_hz": 92.79,
+   "gravity_norm": 9.807,
+   "gyro_absmax": 0.514,
+   "gps_distance_m": 8663.2,
+   "moving_fraction": 0.99,
+   "accel_tier": 4,
+   "accel_quality": 0.149,
+   "video_duration_s": 672.49,
+   "video_frames": 20176,
+   "video_fps": 30.002,
+   "sensor_duration_s": 672.99,
+   "t_video_start_s": 0.47,
+   "sync_source": "gyro-xcorr (bands agree to 35 ms)",
+   "sync_score": 0.816,
+   "speed_max_ms": 26.66,
+   "pos_sigma_median_m": 1.1,
+   "accel_p99_ms2": 1.76,
+   "yawrate_p99_degs": 22.7,
+   "holdout_position (m)": "mean=0.78 m  rms=1.36 m  p95=1.97 m  max=17.05 m  n=674",
+   "holdout_speed (m/s)": "mean=0.15 m/s  rms=0.27 m/s  p95=0.54 m/s  max=2.93 m/s  n=674",
+   "holdout_heading (deg, v>=2.5)": "mean=0.74 deg  rms=2.46 deg  p95=1.53 deg  max=35.79 deg  n=653",
+   "holdout_folds": "5 (each holds out every 5th fix ~ 5 s outage)",
+   "holdout_pos_rms_m": 1.36,
+   "hfov_deg": 107.8,
+   "mount_yaw_deg": -9.6,
+   "mount_pitch_deg": 0.33,
+   "mount_roll_deg": 0.0,
+   "cam_height_m": 1.3,
+   "horizon_row_px": 544.0
+  },
+  "findings": [
+   {
+    "level": "DEGRADED",
+    "code": "EMPTY_CSV",
+    "message": "Annotation.csv is essentially empty",
+    "evidence": {
+     "bytes": 0
+    }
+   },
+   {
+    "level": "DEGRADED",
+    "code": "ACCEL_UNUSABLE",
+    "message": "accelerometer carries no usable longitudinal signal; speed will be GNSS-driven only",
+    "evidence": {
+     "source": "disabled (total_accel - R(q)^T*g, quality=0.15)"
+    }
+   },
+   {
+    "level": "DEGRADED",
+    "code": "WEAK_VEHICLE_FRAME",
+    "message": "phone->vehicle lateral axis is weakly determined",
+    "evidence": {
+     "lateral_score": 0.235
+    }
+   },
+   {
+    "level": "DEGRADED",
+    "code": "ODD_FOV",
+    "message": "focal length implies an unusual field of view",
+    "evidence": {
+     "hfov": 107.8
+    }
+   },
+   {
+    "level": "DEGRADED",
+    "code": "MOUNT_NOT_CALIBRATED",
+    "message": "mount angles were not estimated from the data; nominal values in use",
+    "evidence": {}
+   }
+  ]
+ },
+ "calibration": {
+  "fx": 700.0,
+  "fy": 700.0,
+  "cx": 960.0,
+  "cy": 540.0,
+  "yaw_deg": -9.6,
+  "pitch_deg": 0.32740089084438817,
+  "roll_deg": 0.0,
+  "height_m": 1.3,
+  "lateral_offset_m": 0.0,
+  "sources": {
+   "intrinsics": "gyro-regressed f (r=0.93, n=335)",
+   "foe_rotation_gate": "gyro |omega| per frame interval",
+   "extrinsics_note": "FOE fit selected no usable frame pairs - kept nominal"
+  }
+ },
+ "sync": {
+  "t_video_start_s": 0.470022968719656,
+  "source": "gyro-xcorr (bands agree to 35 ms)"
+ },
+ "finished_utc": "2026-11-08T14:09:51.031841+00:00",
+ "duration_s": 2052.322208404541
+}
