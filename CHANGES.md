@@ -64,6 +64,25 @@ available, and it falls back to the cowl track plus a constant.
 **For new recordings, turn stabilisation off and use a rigid mount.** That removes the
 need for a per-frame track.
 
+## 4K recordings (Galaxy S24 Ultra, 2026-11-03)
+
+The calibration steps are tuned in 1080p pixels (for example `flow_calib` searches for
+the horizon in rows 380-580), so a 3840x2160 video fails calibration. Until the code
+is resolution-independent, scale the video to 1920x1080 and repack the zip with the
+original sensor files. **The frame timestamps must survive the re-encode**: with
+`-fps_mode passthrough` alone, ffmpeg 6.1 still snapped them to an exact 30.000 fps
+grid, off by up to 16.7 ms from the phone's ~30.002 fps (0.4 m at 25 m/s). Adding
+`-enc_time_base:v demux` keeps them exact (checked: 20,176 frames, max difference 0.0 ms).
+
+```bash
+ffmpeg -i Camera/<id>.mp4 -map 0:v:0 -map_metadata 0 -copyts -fps_mode passthrough \
+  -enc_time_base:v demux -vf scale=1920:1080:flags=area -c:v libx264 -preset veryfast \
+  -crf 17 -pix_fmt yuv420p -video_track_timescale 90000 -movflags +faststart out.mp4
+```
+
+`--render-window T0 T1` limits the per-frame outputs (trajectory.jsonl, frames, video)
+to a stretch of the drive for a quick check; calibration still uses the whole recording.
+
 ## Checking an overlay
 
 `tools/verify_overlay.py` measures, on a finished output folder, whether the drawn path

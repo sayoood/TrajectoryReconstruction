@@ -784,6 +784,14 @@ def emit_outputs(out_dir, session, video, sync, traj, steer, cam, args, log, cal
                         (ft <= traj.t[-1] - args.t_future))[0]
     log(f"{len(usable)} of {len(ft)} frames have a complete "
         f"[-{args.t_past:.0f}, +{args.t_future:.0f}] s window")
+    if getattr(args, "render_window", None):
+        # Calibration and the trajectory above used the whole recording; only the
+        # per-frame outputs (trajectory.jsonl, frames, video) are cut to the window.
+        w0, w1 = args.render_window
+        usable = usable[(ft[usable] >= w0) & (ft[usable] <= w1)]
+        log(f"render window {w0:.1f}-{w1:.1f} s (session time): {len(usable)} frames")
+        if len(usable) == 0:
+            raise RuntimeError("--render-window selects no frame with a complete window")
 
     # -- sensors, session level -------------------------------------------- #
     sdir = os.path.join(out_dir, "sensors")
@@ -1107,6 +1115,10 @@ def main():
     ap.add_argument("--frame-quality", type=int, default=90)
     ap.add_argument("--frame-width", type=int, default=0, help="0 keeps native width")
     ap.add_argument("--video-stride", type=int, default=1)
+    ap.add_argument("--render-window", type=float, nargs=2, default=None,
+                    metavar=("T0", "T1"),
+                    help="only write per-frame outputs (trajectory.jsonl, frames, video) for "
+                         "session time T0..T1 s; calibration still uses the whole recording")
     ap.add_argument("--panel-height", type=int, default=720)
     ap.add_argument("--crf", type=int, default=22)
     ap.add_argument("--no-video", action="store_true")

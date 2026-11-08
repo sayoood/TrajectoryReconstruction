@@ -95,3 +95,11 @@ def test_a_bend_is_flagged_not_scored():
     rec["yaw"] = np.where(t > 0, 0.02 * t, 0.0).tolist()      # ~5 deg over 2 s ahead
     r = VO.analyse_frame(_frame(cam), cam, rec, ARGS)
     assert r["straight"] is False
+
+
+def test_a_half_size_frame_reads_like_the_full_one():
+    cam = _cam()
+    img = cv2.resize(_frame(cam), (960, 540), interpolation=cv2.INTER_AREA)
+    r = VO.analyse_frame(img, VO.scaled_camera(cam, 0.5), _rec(y_offset=0.5), ARGS)
+    assert r["offset_frac_10m"] == pytest.approx(-0.5 / LANE, abs=0.03)
+    assert r["angle_deg"] == pytest.approx(0.0, abs=0.3)

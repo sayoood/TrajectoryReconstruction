@@ -33,6 +33,7 @@ counted, not guessed.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import pathlib
 import sys
@@ -55,6 +56,14 @@ def load_camera(cal: dict) -> CameraModel:
                        longitudinal_m=float(e["longitudinal_m"]),
                        yaw=np.deg2rad(float(e["yaw_deg"])), pitch=np.deg2rad(float(e["pitch_deg"])),
                        roll=np.deg2rad(float(e["roll_deg"])))
+
+
+def scaled_camera(cam: CameraModel, k: float) -> CameraModel:
+    """The same camera for an image resized by ``k`` (intrinsics scale, mount does not)."""
+    c = copy.copy(cam)
+    c.width, c.height = int(round(cam.width * k)), int(round(cam.height * k))
+    c.fx, c.fy, c.cx, c.cy = cam.fx * k, cam.fy * k, cam.cx * k, cam.cy * k
+    return c
 
 
 def ribbon_centre(cam: CameraModel, rec: dict, cam_ranges: np.ndarray):
@@ -339,6 +348,8 @@ def main() -> int:
         if rec is None or img is None:
             continue
         cam = camera_for_time(cam0, track, float(rec["t_session_s"]))
+        if img.shape[1] != cam.width:          # frames exported at a reduced width
+            cam = scaled_camera(cam, img.shape[1] / cam.width)
         res = analyse_frame(img, cam, rec, args)
         results.append(res)
         if f in args.draw:
