@@ -94,6 +94,15 @@ the front axle (1.996 m ahead of the rear axle), 0.00 m lateral, 1.25 m above gr
 | 2026-11-21_19-37-30 | 1430 px | 466.7 | -0.666 deg | lane VP (79 frames, spread 0.09 deg); phone tilted ~1.5 deg up vs St2392 (bonnet edge moves by the same 30 px) |
 | Am_Westpark (18:42) | 1430 px | 436.6 | -0.708 deg | horizon from lane VP; yaw declined on urban streets (spread 0.81 deg), St2392's used (same mount position) |
 
+**Lateral offset (applied 2026-11-22, at the PI's request).** With the tape value 0.00 m the drawn
+path sat right of the lane centre on straight roads at 10 m: St2392 +0.161 m (n = 1429), 19:37
++0.052 m (n = 1033), Westpark +0.194 m (n = 2954). The video cannot separate a camera offset from
+the driver keeping right; the renders now ASSUME the car was centred on average and use
+`--lateral-offset` -0.161 / -0.052 / -0.194 m (camera right of the centreline). Result: lane-centre
+offset at 10 m 0.000 / 0.000 / +0.002 and -0.000 lane widths; angle and prediction-vs-outcome
+unchanged (a pure shift). This overrides the tape measurement and should be replaced by a measured
+offset if one becomes available.
+
 **Focal.** The first value, 1220 px from far-field image shift against the gyro over the whole drive,
 was WRONG (contaminated by near street lights at night). It passed every straight-road check,
 because on a straight road a range-scale error only moves the path up or down its own line; it
