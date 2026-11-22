@@ -50,6 +50,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from trajlib.frames import FrameSource
 from trajlib import diagnose as DG
 from trajlib import timesync as TS
 from trajlib import viz
@@ -891,14 +892,10 @@ def emit_outputs(out_dir, session, video, sync, traj, steer, cam, args, log, cal
 
 
 def _grab_bgr(video, index):
-    import cv2
     if hasattr(video, "read_bgr"):
         return video.read_bgr(index)
-    cap = cv2.VideoCapture(video.path)
-    cap.set(cv2.CAP_PROP_POS_FRAMES, index)
-    ok, img = cap.read()
-    cap.release()
-    return img if ok else None
+    with FrameSource(video) as src:          # exact by PTS (variable frame rate)
+        return src.get(int(index))
 
 
 def _extract_frames(video, indices, out_dir, quality, width):
@@ -966,9 +963,13 @@ def _render_video(video, indices, ft, traj, steer, cam, args, out_path, log):
              if getattr(args, "attitude_track", None) else None)
     proc, n = None, 0
     t0 = time.time()
+    # One decoder for the whole render, positioned by PTS: _grab_bgr's per-frame
+    # CAP_PROP_POS_FRAMES seek lands on the wrong frame on variable-frame-rate
+    # video (see trajlib/frames.py), and reopening the file per frame is slow.
+    src = FrameSource(video)
     for k, fi in enumerate(indices):
         ego = _ego_at(traj, float(ft[fi]), args)
-        img = _grab_bgr(video, int(fi))
+        img = src.get(int(fi)) if ego is not None else None
         if ego is None or img is None:
             continue
         cam_t = camera_for_time(cam, track, float(ft[fi]))
@@ -985,6 +986,7 @@ def _render_video(video, indices, ft, traj, steer, cam, args, out_path, log):
         n += 1
         if k and k % 300 == 0:
             log(f"    video {k}/{len(indices)} ({time.time() - t0:.0f}s)")
+    src.release()
     if proc is not None:
         proc.stdin.close()
         proc.wait()

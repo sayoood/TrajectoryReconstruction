@@ -204,7 +204,7 @@ def estimate(session, video, cam, vframe, t_video_start_s: float = 0.0,
     frames_used = 0
     grays: list[tuple[float, np.ndarray]] = []
     for t in times:
-        src.seek(int(round((t - t_video_start_s) * fps)))
+        src.seek(src.index_at(t - t_video_start_s))
         fr = src.read()
         if fr is None:
             continue
@@ -243,7 +243,7 @@ def estimate(session, video, cam, vframe, t_video_start_s: float = 0.0,
         for t in extra:
             if round(t, 2) in have:
                 continue
-            src.seek(int(round((t - t_video_start_s) * fps)))
+            src.seek(src.index_at(t - t_video_start_s))
             fr = src.read()
             if fr is None:
                 continue

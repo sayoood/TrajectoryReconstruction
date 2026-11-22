@@ -83,6 +83,25 @@ ffmpeg -i Camera/<id>.mp4 -map 0:v:0 -map_metadata 0 -copyts -fps_mode passthrou
 `--render-window T0 T1` limits the per-frame outputs (trajectory.jsonl, frames, video)
 to a stretch of the drive for a quick check; calibration still uses the whole recording.
 
+## Variable-frame-rate video: exact frame access (2026-11-22)
+
+The night recordings of 2026-11-21 (Galaxy S24 Ultra, main lens) are variable-frame-rate:
+33.3 ms frames, stretched to 40 ms in the dark. Every frame lookup in the pipeline went through
+OpenCV's `CAP_PROP_POS_FRAMES`, which turns an index into a time with one average fps, and
+`lane_calib` turned times into indices the same way. MEASURED on St2392: the old seek returned
+the wrong frame for 10 of 10 probed indices; the rendered pilot showed the camera image 12
+frames (0.4 s, about 10 m at 93 km/h) away from its overlay, and the offset changed abruptly,
+which played as jumps. The 2026-11-03 1000N recording was constant 30 fps and was not affected.
+
+* `trajlib/frames.py`: `FrameSource` positions by each frame's PTS and confirms the decoder's
+  timestamp before returning it; short forward hops decode through. New `get(i)` and
+  `index_at(t)`.
+* `pipeline.py`: the render keeps one `FrameSource` for the whole clip instead of reopening the
+  file and seeking per frame; `_grab_bgr` uses it too.
+* `trajlib/lane_calib.py`: frame index from PTS, not `t * fps`.
+* Test: `tests/test_frames_vfr.py` builds a VFR clip whose frames carry their own index and
+  checks random, sequential and strided access (and that the naive seek is wrong on it).
+
 ## Longitudinal accelerometer (2026-11-22)
 
 `trajlib/accel_source.py` had been switching the forward accelerometer off on every S24 Ultra
