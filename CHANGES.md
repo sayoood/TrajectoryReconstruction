@@ -101,6 +101,11 @@ which played as jumps. The 2026-11-03 1000N recording was constant 30 fps and wa
 * `trajlib/lane_calib.py`: frame index from PTS, not `t * fps`.
 * Test: `tests/test_frames_vfr.py` builds a VFR clip whose frames carry their own index and
   checks random, sequential and strided access (and that the naive seek is wrong on it).
+* **Sync decoder** (`timesync._iter_gray_frames`): the rawvideo pipe defaulted to constant-rate
+  output and duplicated frames (St2392: 16,191 emitted for 15,902), while the caller pairs frames
+  with `video.pts` by index. Now `-fps_mode passthrough`. On St2392 the sync window (first 40 s)
+  had no stretched frames, so its result was unchanged (0.2496 s); a window at 480-520 s gives
+  0.3038 s, 54 ms apart.
 * **Real-time output.** The render wrote one output frame per source frame at a fixed rate, so
   the clip ran fast wherever frames were stretched (St2392: up to 5.8 s ahead of real time;
   the 60 s pilot played in 55.2 s). It now writes at the nominal rate (median frame interval)

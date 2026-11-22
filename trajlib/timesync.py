@@ -189,8 +189,15 @@ def _iter_gray_frames(path: str, width: int, height: int, first: int = 0,
     the preceding keyframe, which on this ~1 s-GOP phone footage silently
     shifted every timestamp by up to a second and poisoned the lag estimate.
     """
+    # ``-fps_mode passthrough``: emit each decoded frame exactly once.  The rawvideo
+    # muxer has no timestamps, so ffmpeg's default is constant-rate output, which
+    # DUPLICATES frames on variable-frame-rate video -- and the caller pairs frames
+    # with ``video.pts`` by index.  MEASURED on 2026-11-21 St2392 (night, 33/40 ms
+    # frames): 16,191 frames emitted for 15,902 in the file, so the image rate's
+    # timestamps drifted by up to ~290 frames over the clip.
     cmd = [_ff("ffmpeg"), "-v", "error", "-i", path,
            "-vf", f"scale={width}:{height}", "-pix_fmt", "gray",
+           "-fps_mode", "passthrough", "-enc_time_base:v", "demux",
            "-f", "rawvideo", "-"]
     n = width * height
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=n * 8)

@@ -111,3 +111,11 @@ def test_realtime_repeats_keeps_wall_clock():
     assert np.all(np.r_[t[1:], np.inf][shown] > ticks - 1e-3)
     # constant 30 fps input -> exactly one write per frame
     assert np.all(realtime_repeats(np.arange(300) / 30.0, 30.0) == 1)
+
+
+def test_sync_decoder_emits_each_frame_once(vfr_video):
+    """timesync pairs decoded frames with video.pts BY INDEX; a constant-rate decoder
+    duplicates frames on VFR input (St2392: 16,191 emitted for 15,902)."""
+    from trajlib.timesync import _iter_gray_frames
+    n = sum(1 for _ in _iter_gray_frames(vfr_video.path, 64, 20))
+    assert n == len(vfr_video.pts)
