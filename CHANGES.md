@@ -83,6 +83,46 @@ ffmpeg -i Camera/<id>.mp4 -map 0:v:0 -map_metadata 0 -copyts -fps_mode passthrou
 `--render-window T0 T1` limits the per-frame outputs (trajectory.jsonl, frames, video)
 to a stretch of the drive for a quick check; calibration still uses the whole recording.
 
+## Longitudinal accelerometer (2026-11-22)
+
+`trajlib/accel_source.py` had been switching the forward accelerometer off on every S24 Ultra
+recording ("accelerometer carries no usable longitudinal signal"). The sensor was not at fault.
+Tier 1 removed gravity with the phone's own `Orientation` quaternion, and that attitude is
+accel-led: it tilts toward any sustained acceleration, so subtracting it cancels the signal.
+MEASURED on 2026-11-03 1000N (1 s means against GNSS dv/dt): tier 1 r = 0.27, gain 0.12;
+the phone's gravity estimate alone r = 0.90, gain 0.87 (that is the acceleration it absorbed);
+the raw accelerometer with gravity held fixed r = 0.94, gain 0.99.
+
+* **Tier 0 (new, default):** raw `TotalAcceleration` in the fixed vehicle frame, gravity treated
+  as constant (the mount is rigid), median removed; slow road grade is left to the filter's
+  accel-bias state. `cfg["accel_mode"]`: `auto` (default) | `legacy` (old tiers 1-3 and scoring)
+  | `none`.
+* **Scoring:** 1 s means of the accelerometer against GNSS speed differences (point-sampling a
+  100 Hz signal at 1 Hz compares vibration with a finite difference); GNSS speed glitches
+  rejected on the joint-fit residual (MAD, iterated); gain is the symmetric slope (both sides
+  are noisy) and must lie in 0.6-1.6. St2392 at night (receiver speed accuracy 0.81 m/s vs 0.14)
+  went from r = 0.57, gain 0.44 (rejected) to r = 0.85, gain 1.00 (accepted); 4 of 491 intervals
+  were glitches.
+* **Barometric grade (opt-in, `grade_source="baro"`), off by default:** with it the 1000N channel
+  fell from r = 0.94 to 0.76 and one 10 s outage diverged to 153 m. Cabin pressure follows speed
+  and ventilation, not only road climb.
+
+GNSS hold-out, `legacy` → `auto` (every 5th fix withheld; plus 8 outages of 10 s and of 30 s
+per drive with ALL GNSS removed while moving; n = 8 per gap length, so read them as indicative):
+
+| | 1000N legacy | 1000N auto | St2392 legacy | St2392 auto |
+|---|---|---|---|---|
+| hold-out position RMS | 1.36 m | **1.08 m** | 1.88 m | 1.91 m |
+| hold-out speed RMS | 0.27 m/s | **0.17 m/s** | 0.84 m/s | 0.80 m/s |
+| hold-out heading p95 | 1.53° | 1.42° | 3.52° | 3.84° |
+| 10 s outage position RMS (worst gap) | 1.80 m (3.57) | **1.28 m (2.94)** | 3.31 m (8.51) | **2.33 m (4.37)** |
+| 30 s outage position RMS (worst gap) | 9.90 m (31.6) | **3.57 m (12.5)** | 10.1 m (27.2) | **7.54 m (22.5)** |
+| 30 s outage speed RMS | 1.30 m/s | **0.43 m/s** | 1.47 m/s | **1.07 m/s** |
+
+Where GNSS is present it decides the answer and the change is small; across outages the
+accelerometer carries the speed, and 30 s outage error drops by 2.8× (1000N) and 1.3× (St2392).
+Tests: `tests/test_accel_source.py`.
+
 ## Checking an overlay
 
 `tools/verify_overlay.py` measures, on a finished output folder, whether the drawn path

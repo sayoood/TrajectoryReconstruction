@@ -174,6 +174,8 @@ DEFAULT_CFG = dict(
     gate_chi2=16.0,          # innovation gate (2-DOF, ~4 sigma)
     hacc_inflate=1.0,        # inflating the reported accuracy measurably hurt
                              # hold-out position; trust the receiver's own number
+    accel_mode="auto",       # longitudinal accel source: auto | legacy | none
+                             # (see trajlib/accel_source.py)
 )
 
 
@@ -302,7 +304,7 @@ def estimate_trajectory(session, vframe, t_lo=None, t_hi=None, cfg=None,
         fc = min(cfg["gyro_lowpass_hz"], 0.45 * fs)
         omega = sosfiltfilt(butter(2, fc, "low", fs=fs, output="sos"), omega)
 
-    asrc = longitudinal_acceleration(session, vframe, t_grid)
+    asrc = longitudinal_acceleration(session, vframe, t_grid, mode=cfg.get("accel_mode", "auto"))
     a_f = asrc.a_fwd
     if not asrc.usable:
         # No trustworthy longitudinal input: model speed as a random walk whose
