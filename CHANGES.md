@@ -83,6 +83,27 @@ ffmpeg -i Camera/<id>.mp4 -map 0:v:0 -map_metadata 0 -copyts -fps_mode passthrou
 `--render-window T0 T1` limits the per-frame outputs (trajectory.jsonl, frames, video)
 to a stretch of the drive for a quick check; calibration still uses the whole recording.
 
+## 2026-11-21 recordings (S24 Ultra main lens, 4K, night): camera values
+
+Mount by tape (`Data/.../261121_Verbauort_Smartphone-Kamera_Position_Masse.PNG`): 0.95 m behind
+the front axle (1.996 m ahead of the rear axle), 0.00 m lateral, 1.25 m above ground.
+
+| recording | focal (1080p) | horizon row | yaw | source |
+|---|---|---|---|---|
+| St2392 (19:04) | 1430 px | 434.5 | -0.708 deg | lane VP (71 frames, spread 0.13 deg) |
+| 2026-11-21_19-37-30 | 1430 px | 466.7 | -0.666 deg | lane VP (79 frames, spread 0.09 deg); phone tilted ~1.5 deg up vs St2392 (bonnet edge moves by the same 30 px) |
+| Am_Westpark (18:42) | 1430 px | 436.6 | -0.708 deg | horizon from lane VP; yaw declined on urban streets (spread 0.81 deg), St2392's used (same mount position) |
+
+**Focal.** The first value, 1220 px from far-field image shift against the gyro over the whole drive,
+was WRONG (contaminated by near street lights at night). It passed every straight-road check,
+because on a straight road a range-scale error only moves the path up or down its own line; it
+showed in tight turns (roundabouts), where the far path landed on the verge. MEASURED instead by
+fitting road-surface flow between frames against the ego motion (height, horizon and VP column
+fixed): 1375 / 1425 / 1525 / 1450 px on four slow St2392 windows and 1500 px on the slowest 19:37
+window with an 8-frame gap; the gyro method restricted to low speed and features above the horizon
+gives 1385-1430 px. Lane width from the tape height (f-independent) is 3.66 m, consistent with
+1.25 m. Windows at motorway speed are unusable for the flow fit (tracking fails).
+
 ## Variable-frame-rate video: exact frame access (2026-11-22)
 
 The night recordings of 2026-11-21 (Galaxy S24 Ultra, main lens) are variable-frame-rate:
