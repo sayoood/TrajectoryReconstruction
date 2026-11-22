@@ -158,3 +158,27 @@ class FrameSource:
     def __exit__(self, *exc):
         self.release()
         return False
+
+
+def realtime_repeats(times, fps: float):
+    """How many times to write each frame so a constant-``fps`` output plays in real time.
+
+    ``times`` are the frames' own timestamps (seconds, ascending).  Output tick
+    ``j`` sits at ``times[0] + j / fps`` and shows the latest frame at or before it,
+    so a frame that lasted 40 ms on a 30 fps grid is occasionally shown twice and
+    the clip keeps the wall-clock duration.  Writing the frames back to back at a
+    fixed rate instead compresses every stretched frame: MEASURED on the
+    2026-11-21 St2392 night recording (1,438 of 15,902 frames at 40 ms) the
+    rendered clip drifted up to 5.8 s ahead of real time.
+    Returns an int array, one count per frame (0 = dropped, when frames are
+    denser than ``fps``).
+    """
+    import numpy as np
+    t = np.asarray(times, dtype=float)
+    if len(t) == 0:
+        return np.zeros(0, dtype=int)
+    n_ticks = int(np.floor((t[-1] - t[0]) * fps + 1e-6)) + 1
+    ticks = t[0] + np.arange(n_ticks) / fps
+    # latest frame at or before each tick (half a millisecond of slack for rounding)
+    k = np.searchsorted(t, ticks + 5e-4, side="right") - 1
+    return np.bincount(np.clip(k, 0, len(t) - 1), minlength=len(t)).astype(int)

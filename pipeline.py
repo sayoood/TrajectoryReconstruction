@@ -50,7 +50,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from trajlib.frames import FrameSource
+from trajlib.frames import FrameSource, realtime_repeats
 from trajlib import diagnose as DG
 from trajlib import timesync as TS
 from trajlib import viz
@@ -958,7 +958,14 @@ def _render_video(video, indices, ft, traj, steer, cam, args, out_path, log):
     if ffmpeg is None:
         log("ffmpeg not on PATH; skipping the video", "WARN")
         return 0
-    fps = max(video.avg_fps / max(args.video_stride, 1), 1.0)
+    # Output at the stream's NOMINAL rate (the median frame interval) and repeat a
+    # frame where it really lasted longer, so the clip plays in real time on
+    # variable-frame-rate video (trajlib.frames.realtime_repeats).
+    pts = np.asarray(getattr(video, "pts", []), dtype=float)
+    dts = np.diff(pts)
+    nominal = (1.0 / float(np.median(dts[dts > 0]))) if (dts > 0).sum() > 10 else video.avg_fps
+    fps = max(nominal / max(args.video_stride, 1), 1.0)
+    reps = realtime_repeats(ft[np.asarray(indices)], fps) if len(indices) else []
     track = (load_attitude_track(args.attitude_track)
              if getattr(args, "attitude_track", None) else None)
     proc, n = None, 0
@@ -968,6 +975,8 @@ def _render_video(video, indices, ft, traj, steer, cam, args, out_path, log):
     # video (see trajlib/frames.py), and reopening the file per frame is slow.
     src = FrameSource(video)
     for k, fi in enumerate(indices):
+        if reps[k] == 0:
+            continue
         ego = _ego_at(traj, float(ft[fi]), args)
         img = src.get(int(fi)) if ego is not None else None
         if ego is None or img is None:
@@ -982,7 +991,9 @@ def _render_video(video, indices, ft, traj, steer, cam, args, out_path, log):
                  "-c:v", "libx264", "-preset", "medium", "-crf", str(args.crf),
                  "-pix_fmt", "yuv420p", "-movflags", "+faststart", out_path],
                 stdin=subprocess.PIPE)
-        proc.stdin.write(panel.tobytes())
+        buf = panel.tobytes()
+        for _ in range(int(reps[k])):
+            proc.stdin.write(buf)
         n += 1
         if k and k % 300 == 0:
             log(f"    video {k}/{len(indices)} ({time.time() - t0:.0f}s)")

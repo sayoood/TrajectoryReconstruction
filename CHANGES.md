@@ -101,6 +101,12 @@ which played as jumps. The 2026-11-03 1000N recording was constant 30 fps and wa
 * `trajlib/lane_calib.py`: frame index from PTS, not `t * fps`.
 * Test: `tests/test_frames_vfr.py` builds a VFR clip whose frames carry their own index and
   checks random, sequential and strided access (and that the naive seek is wrong on it).
+* **Real-time output.** The render wrote one output frame per source frame at a fixed rate, so
+  the clip ran fast wherever frames were stretched (St2392: up to 5.8 s ahead of real time;
+  the 60 s pilot played in 55.2 s). It now writes at the nominal rate (median frame interval)
+  and repeats a frame for as long as it really lasted (`trajlib.frames.realtime_repeats`).
+  `tools/retime_overlay.py` does the same to an already-rendered clip, using the run's
+  `trajectory.jsonl` timestamps (refuses if the frame counts differ).
 
 ## Longitudinal accelerometer (2026-11-22)
 

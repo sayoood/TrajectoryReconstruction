@@ -94,3 +94,20 @@ def test_index_at_uses_pts_not_average_fps(vfr_video):
             assert src.index_at(float(vfr_video.pts[i]) + 0.004) == i
         # the average-fps mapping is off by several frames at the end of the slow stretch
         assert abs(int(round(float(vfr_video.pts[199]) * src.fps)) - 199) >= 2
+
+
+def test_realtime_repeats_keeps_wall_clock():
+    from trajlib.frames import realtime_repeats
+    # 30 fps with a stretch of 40 ms frames
+    d = np.r_[np.full(100, 1 / 30), np.full(150, 0.040), np.full(100, 1 / 30)]
+    t = np.r_[0.0, np.cumsum(d)]
+    r = realtime_repeats(t, 30.0)
+    assert len(r) == len(t) and r.min() >= 1           # nothing dropped
+    assert abs(r.sum() / 30.0 - (t[-1] - t[0])) <= 1 / 30 + 1e-9   # duration kept (± one tick)
+    # every output tick shows the frame current at that time
+    shown = np.repeat(np.arange(len(t)), r)
+    ticks = t[0] + np.arange(len(shown)) / 30.0
+    assert np.all(t[shown] <= ticks + 1e-3)
+    assert np.all(np.r_[t[1:], np.inf][shown] > ticks - 1e-3)
+    # constant 30 fps input -> exactly one write per frame
+    assert np.all(realtime_repeats(np.arange(300) / 30.0, 30.0) == 1)
